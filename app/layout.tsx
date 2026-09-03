@@ -1,0 +1,19 @@
+import type { Metadata } from "next";
+import "./globals.css";
+
+export const metadata: Metadata = {
+  title: "Pádel Reservas",
+  description: "Etapa 1 - fundación técnica",
+};
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="es">
+      <body className="min-h-screen bg-gray-50 text-gray-900">{children}</body>
+    </html>
+  );
+}
