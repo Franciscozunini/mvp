@@ -14,22 +14,16 @@ type Cancha = {
   horario_cierre: string;
   precio_turno: number;
 };
+type Reglas = { anticipacion_min_horas: number; cancelacion_min_horas: number };
 
-const money = new Intl.NumberFormat("es-AR", {
-  style: "currency",
-  currency: "ARS",
-  maximumFractionDigits: 0,
-});
-
-const hoyAR = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "America/Argentina/Buenos_Aires",
-}).format(new Date());
-
+const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
+const hoyAR = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
 const hhmm = new Intl.DateTimeFormat("es-AR", {
   timeZone: "America/Argentina/Buenos_Aires",
   hour: "2-digit",
   minute: "2-digit",
 });
+const H = 3_600_000;
 
 export default function DisponibilidadPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -43,54 +37,47 @@ export default function DisponibilidadPage() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [cargando, setCargando] = useState(false);
   const [miJugadorId, setMiJugadorId] = useState<string | null>(null);
+  const [reglas, setReglas] = useState<Reglas>({ anticipacion_min_horas: 0, cancelacion_min_horas: 0 });
   const [version, setVersion] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
 
   const recargar = useCallback(() => setVersion((v) => v + 1), []);
 
-  // Quién soy: si el usuario logueado tiene fila en jugadores, puede reservar.
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       const email = data.user?.email;
       if (!email) return setMiJugadorId(null);
-      supabase
-        .from("jugadores")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle()
-        .then(({ data: j }) => setMiJugadorId((j as { id: string } | null)?.id ?? null));
+      supabase.from("jugadores").select("id").eq("email", email).maybeSingle().then(({ data: j }) =>
+        setMiJugadorId((j as { id: string } | null)?.id ?? null)
+      );
     });
   }, [supabase]);
 
-  // Clubes (una vez).
   useEffect(() => {
-    supabase
-      .from("clubes")
-      .select("id, nombre")
-      .order("nombre")
-      .then(({ data }) => {
-        const rows = (data as Club[]) ?? [];
-        setClubes(rows);
-        setClubId((prev) => prev || rows[0]?.id || "");
-      });
+    supabase.from("clubes").select("id, nombre").order("nombre").then(({ data }) => {
+      const rows = (data as Club[]) ?? [];
+      setClubes(rows);
+      setClubId((prev) => prev || rows[0]?.id || "");
+    });
   }, [supabase]);
 
-  // Sedes del club.
   useEffect(() => {
     if (!clubId) return;
+    supabase.from("sedes").select("id, nombre").eq("club_id", clubId).order("nombre").then(({ data }) => {
+      const rows = (data as Sede[]) ?? [];
+      setSedes(rows);
+      setSedeId(rows[0]?.id || "");
+    });
     supabase
-      .from("sedes")
-      .select("id, nombre")
+      .from("reglas_club")
+      .select("anticipacion_min_horas, cancelacion_min_horas")
       .eq("club_id", clubId)
-      .order("nombre")
-      .then(({ data }) => {
-        const rows = (data as Sede[]) ?? [];
-        setSedes(rows);
-        setSedeId(rows[0]?.id || "");
-      });
+      .maybeSingle()
+      .then(({ data }) =>
+        setReglas((data as Reglas) ?? { anticipacion_min_horas: 0, cancelacion_min_horas: 0 })
+      );
   }, [supabase, clubId]);
 
-  // Canchas de la sede.
   useEffect(() => {
     if (!sedeId) return;
     supabase
@@ -105,37 +92,39 @@ export default function DisponibilidadPage() {
       });
   }, [supabase, sedeId]);
 
-  // Slots según cancha + fecha (+ version para refrescar tras reservar/cancelar).
   useEffect(() => {
     const cancha = canchas.find((c) => c.id === canchaId);
-    if (!cancha || !fecha) {
-      setSlots([]);
-      return;
-    }
+    if (!cancha || !fecha) return setSlots([]);
     setCargando(true);
     const openIso = arLocalToUtc(fecha, cancha.horario_apertura).toISOString();
     const closeIso = arLocalToUtc(fecha, cancha.horario_cierre).toISOString();
-    supabase
-      .from("reservas")
-      .select("id, jugador_id, inicio, fin")
-      .eq("cancha_id", cancha.id)
-      .neq("estado", "cancelada")
-      .lt("inicio", closeIso)
-      .gt("fin", openIso)
-      .then(({ data }) => {
-        setSlots(
-          generarSlots({
-            fecha,
-            apertura: cancha.horario_apertura,
-            cierre: cancha.horario_cierre,
-            duracionMin: cancha.duracion_turno_minutos,
-            reservas:
-              (data as { id: string; jugador_id: string | null; inicio: string; fin: string }[]) ??
-              [],
-          })
-        );
-        setCargando(false);
-      });
+    Promise.all([
+      supabase
+        .from("reservas")
+        .select("id, jugador_id, pago_estado, inicio, fin")
+        .eq("cancha_id", cancha.id)
+        .neq("estado", "cancelada")
+        .lt("inicio", closeIso)
+        .gt("fin", openIso),
+      supabase
+        .from("bloqueos")
+        .select("inicio, fin")
+        .eq("cancha_id", cancha.id)
+        .lt("inicio", closeIso)
+        .gt("fin", openIso),
+    ]).then(([r, b]) => {
+      setSlots(
+        generarSlots({
+          fecha,
+          apertura: cancha.horario_apertura,
+          cierre: cancha.horario_cierre,
+          duracionMin: cancha.duracion_turno_minutos,
+          reservas: (r.data as never[]) ?? [],
+          bloqueos: (b.data as { inicio: string; fin: string }[]) ?? [],
+        })
+      );
+      setCargando(false);
+    });
   }, [supabase, canchaId, canchas, fecha, version]);
 
   async function reservar(slot: Slot) {
@@ -147,14 +136,14 @@ export default function DisponibilidadPage() {
       inicio: slot.inicio.toISOString(),
       fin: slot.fin.toISOString(),
     });
-    if (error) setMsg("No se pudo reservar (¿turno ya tomado?).");
+    if (error) setMsg(error.message);
     recargar();
   }
 
   async function cancelar(reservaId: string) {
     setMsg(null);
     const { error } = await supabase.from("reservas").delete().eq("id", reservaId);
-    if (error) setMsg("No se pudo cancelar.");
+    if (error) setMsg(error.message);
     recargar();
   }
 
@@ -164,9 +153,7 @@ export default function DisponibilidadPage() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-4 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold">Disponibilidad</h1>
-        <a href="/dashboard" className="text-sm underline">
-          ← Volver
-        </a>
+        <a href="/dashboard" className="text-sm underline">← Volver</a>
       </div>
 
       <p className="text-xs text-gray-600">
@@ -176,41 +163,31 @@ export default function DisponibilidadPage() {
       </p>
 
       <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-sm">
-          Club
+        <label className="flex flex-col gap-1 text-sm">Club
           <select value={clubId} onChange={(e) => setClubId(e.target.value)} className="rounded border px-2 py-1">
-            {clubes.map((c) => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
+            {clubes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Sede
+        <label className="flex flex-col gap-1 text-sm">Sede
           <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} className="rounded border px-2 py-1">
-            {sedes.map((s) => (
-              <option key={s.id} value={s.id}>{s.nombre}</option>
-            ))}
+            {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Cancha
+        <label className="flex flex-col gap-1 text-sm">Cancha
           <select value={canchaId} onChange={(e) => setCanchaId(e.target.value)} className="rounded border px-2 py-1">
-            {canchas.map((c) => (
-              <option key={c.id} value={c.id}>{c.nombre}</option>
-            ))}
+            {canchas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Fecha
+        <label className="flex flex-col gap-1 text-sm">Fecha
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="rounded border px-2 py-1" />
         </label>
       </div>
 
       {canchaSel && (
         <p className="text-xs text-gray-600">
-          Turnos de {canchaSel.duracion_turno_minutos} min ·{" "}
-          {canchaSel.horario_apertura.slice(0, 5)}–{canchaSel.horario_cierre.slice(0, 5)} (hora AR) ·{" "}
-          {money.format(Number(canchaSel.precio_turno))} por turno
+          Turnos de {canchaSel.duracion_turno_minutos} min · {canchaSel.horario_apertura.slice(0, 5)}–
+          {canchaSel.horario_cierre.slice(0, 5)} (hora AR) · {money.format(Number(canchaSel.precio_turno))} por turno
+          {reglas.anticipacion_min_horas > 0 && ` · reservar con ${reglas.anticipacion_min_horas}h de anticipación`}
         </p>
       )}
 
@@ -223,32 +200,40 @@ export default function DisponibilidadPage() {
       ) : (
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {slots.map((s, i) => {
+            const ahora = Date.now();
             const esMia = !!s.reserva && s.reserva.jugador_id === miJugadorId;
             const ocupado = !!s.reserva;
+            const reservable =
+              miJugadorId && !ocupado && !s.bloqueado &&
+              s.inicio.getTime() >= ahora + reglas.anticipacion_min_horas * H;
+            const cancelable =
+              esMia && ahora < s.inicio.getTime() - reglas.cancelacion_min_horas * H;
+            const cls = s.bloqueado
+              ? "border-gray-300 bg-gray-100 text-gray-500"
+              : esMia
+              ? "border-blue-300 bg-blue-50 text-blue-700"
+              : ocupado
+              ? "border-red-300 bg-red-50 text-red-700"
+              : "border-green-300 bg-green-50 text-green-700";
             return (
-              <li
-                key={i}
-                className={`rounded border px-2 py-2 text-center text-sm ${
-                  esMia
-                    ? "border-blue-300 bg-blue-50 text-blue-700"
-                    : ocupado
-                    ? "border-red-300 bg-red-50 text-red-700"
-                    : "border-green-300 bg-green-50 text-green-700"
-                }`}
-              >
-                <div className="font-medium">
-                  {hhmm.format(s.inicio)}–{hhmm.format(s.fin)}
-                </div>
-                {esMia ? (
-                  <button onClick={() => cancelar(s.reserva!.id)} className="mt-1 text-xs underline">
-                    Cancelar
-                  </button>
+              <li key={i} className={`rounded border px-2 py-2 text-center text-sm ${cls}`}>
+                <div className="font-medium">{hhmm.format(s.inicio)}–{hhmm.format(s.fin)}</div>
+                {s.bloqueado ? (
+                  <div className="text-xs">No disponible</div>
+                ) : esMia ? (
+                  <div className="text-xs">
+                    <div>{s.reserva!.pago_estado === "senada" ? "Señada ✓" : "Sin señar"}</div>
+                    {s.reserva!.pago_estado !== "senada" && (
+                      <a href={`/pago/${s.reserva!.id}`} className="underline">Pagar seña</a>
+                    )}
+                    {cancelable && (
+                      <button onClick={() => cancelar(s.reserva!.id)} className="ml-2 underline">Cancelar</button>
+                    )}
+                  </div>
                 ) : ocupado ? (
                   <div className="text-xs">Ocupado</div>
-                ) : miJugadorId ? (
-                  <button onClick={() => reservar(s)} className="mt-1 text-xs underline">
-                    Reservar
-                  </button>
+                ) : reservable ? (
+                  <button onClick={() => reservar(s)} className="mt-1 text-xs underline">Reservar</button>
                 ) : (
                   <div className="text-xs">Libre</div>
                 )}

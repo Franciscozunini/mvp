@@ -24,6 +24,7 @@ const clubes = [
     apertura: "08:00",
     cierre: "23:00",
     adminEmail: "admin.norte@padel.test",
+    reglas: { anticipacion_min_horas: 1, cancelacion_min_horas: 2, max_reservas_activas: 3, sena_porcentaje: 30 },
     sedes: [
       { nombre: "Sede Centro", direccion: "Av. Norte 100", canchas: 3 },
       { nombre: "Sede Palermo", direccion: "Av. Norte 250", canchas: 2 },
@@ -36,6 +37,7 @@ const clubes = [
     apertura: "07:00",
     cierre: "22:00",
     adminEmail: "admin.sur@padel.test",
+    reglas: { anticipacion_min_horas: 2, cancelacion_min_horas: 4, max_reservas_activas: 2, sena_porcentaje: 50 },
     sedes: [{ nombre: "Sede Única", direccion: "Av. Sur 500", canchas: 3 }],
   },
 ];
@@ -65,7 +67,7 @@ async function borrarAuthUsers(emails) {
 
 async function main() {
   // 1. Limpiar (orden FK-safe).
-  for (const t of ["reservas", "jugadores", "usuarios_club", "canchas", "sedes", "clubes"]) {
+  for (const t of ["pagos", "reservas", "bloqueos", "jugadores", "usuarios_club", "canchas", "reglas_club", "sedes", "clubes"]) {
     await del(t);
   }
 
@@ -134,6 +136,11 @@ async function main() {
       .from("usuarios_club")
       .insert({ club_id: clubRow.id, email: club.adminEmail, rol: "admin" });
     if (e5) throw new Error(`usuarios_club ${club.adminEmail}: ${e5.message}`);
+
+    const { error: e5b } = await db
+      .from("reglas_club")
+      .insert({ club_id: clubRow.id, ...club.reglas });
+    if (e5b) throw new Error(`reglas_club ${club.nombre}: ${e5b.message}`);
   }
 
   // 4. Jugadores: fila + auth user (confirmado; login por magic link).
@@ -179,11 +186,23 @@ async function main() {
     if (e8) throw new Error(`reservas: ${e8.message}`);
   }
 
+  // 6. Bloqueo de ejemplo (hoy AR, 16:00–17:00) en la 1ra cancha del primer club.
+  if (canchasDemo[0]) {
+    const { error: e9 } = await db.from("bloqueos").insert({
+      cancha_id: canchasDemo[0].id,
+      inicio: utc("16:00"),
+      fin: utc("17:00"),
+      motivo: "Mantenimiento",
+    });
+    if (e9) throw new Error(`bloqueos: ${e9.message}`);
+  }
+
   console.log("Seed OK");
   console.log(`  Clubes: ${clubes.length}`);
   console.log(`  Admins (password: ${ADMIN_PASSWORD}): ${clubes.map((c) => c.adminEmail).join(", ")}`);
   console.log(`  Jugadores: ${jugadores.map((j) => j.email).join(", ")}`);
   console.log(`  Reservas de ejemplo: ${reservas.length} (fecha ${hoyAR}, 10:00 y 14:00 AR)`);
+  console.log(`  Reglas por club + 1 bloqueo de ejemplo (16:00–17:00) cargados`);
 }
 
 main().catch((err) => {
