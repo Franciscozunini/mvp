@@ -12,7 +12,14 @@ type Cancha = {
   duracion_turno_minutos: number;
   horario_apertura: string;
   horario_cierre: string;
+  precio_turno: number;
 };
+
+const money = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "ARS",
+  maximumFractionDigits: 0,
+});
 
 const hoyAR = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Argentina/Buenos_Aires",
@@ -88,7 +95,7 @@ export default function DisponibilidadPage() {
     if (!sedeId) return;
     supabase
       .from("canchas")
-      .select("id, nombre, duracion_turno_minutos, horario_apertura, horario_cierre")
+      .select("id, nombre, duracion_turno_minutos, horario_apertura, horario_cierre, precio_turno")
       .eq("sede_id", sedeId)
       .order("nombre")
       .then(({ data }) => {
@@ -202,7 +209,8 @@ export default function DisponibilidadPage() {
       {canchaSel && (
         <p className="text-xs text-gray-600">
           Turnos de {canchaSel.duracion_turno_minutos} min ·{" "}
-          {canchaSel.horario_apertura.slice(0, 5)}–{canchaSel.horario_cierre.slice(0, 5)} (hora AR)
+          {canchaSel.horario_apertura.slice(0, 5)}–{canchaSel.horario_cierre.slice(0, 5)} (hora AR) ·{" "}
+          {money.format(Number(canchaSel.precio_turno))} por turno
         </p>
       )}
 

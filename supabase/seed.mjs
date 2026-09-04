@@ -103,6 +103,7 @@ async function main() {
           duracion_turno_minutos: i % 2 === 0 ? 90 : 60, // mezcla 60/90
           horario_apertura: club.apertura,
           horario_cierre: club.cierre,
+          precio_turno: i % 2 === 0 ? 9000 : 6000, // ARS por turno (90/60 min)
         });
       }
       const { data: canchasRows, error: e3 } = await db
