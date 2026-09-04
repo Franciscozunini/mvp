@@ -9,7 +9,7 @@ Solo fundación: clubes/sedes/canchas/usuarios_club/jugadores, auth multi-club y
 2. Crear proyecto en Supabase. Copiar `.env.example` a `.env.local` y completar
    `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` y `SUPABASE_SERVICE_ROLE_KEY`.
 3. Ejecutar el esquema: pegar en el SQL Editor de Supabase, en orden,
-   `supabase/migrations/0001_init.sql` y luego `supabase/migrations/0002_reservas.sql`.
+   `0001_init.sql`, `0002_reservas.sql` y `0003_reservas_jugador.sql` (carpeta `supabase/migrations/`).
 4. Cargar datos de prueba: `npm run seed`
 5. Correr: `npm run dev` → http://localhost:3000
 
@@ -17,7 +17,7 @@ Solo fundación: clubes/sedes/canchas/usuarios_club/jugadores, auth multi-club y
 
 - `/` — login (jugador: magic link · admin: email+password)
 - `/dashboard` — post-login: rol y club (requiere sesión)
-- `/disponibilidad` — ver turnos libres/ocupados por club/sede/cancha/fecha (solo lectura)
+- `/disponibilidad` — turnos por club/sede/cancha/fecha; un jugador logueado puede **reservar** un turno libre y **cancelar** los suyos
 
 ## Cuentas de prueba (creadas por el seed)
 
