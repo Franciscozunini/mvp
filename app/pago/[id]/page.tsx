@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppHeader from "@/components/AppHeader";
+import { Card, Button, Badge, Spinner, EmptyState } from "@/components/ui";
+import { Wallet, Check, ShieldCheck, ArrowLeft, CalendarX2 } from "lucide-react";
 
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
-const fechaHora = new Intl.DateTimeFormat("es-AR", {
-  timeZone: "America/Argentina/Buenos_Aires",
-  dateStyle: "short",
-  timeStyle: "short",
-});
+const fechaHora = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", dateStyle: "long", timeStyle: "short" });
 
 export default function PagoPage({ params }: { params: { id: string } }) {
   const supabase = useMemo(() => createClient(), []);
@@ -37,11 +35,7 @@ export default function PagoPage({ params }: { params: { id: string } }) {
         const clubId = r.canchas?.sedes?.club_id;
         let pct = 30;
         if (clubId) {
-          const { data: reg } = await supabase
-            .from("reglas_club")
-            .select("sena_porcentaje")
-            .eq("club_id", clubId)
-            .maybeSingle();
+          const { data: reg } = await supabase.from("reglas_club").select("sena_porcentaje").eq("club_id", clubId).maybeSingle();
           if (reg) pct = (reg as { sena_porcentaje: number }).sena_porcentaje;
         }
         setSena(Math.round((Number(r.canchas?.precio_turno ?? 0) * pct) / 100));
@@ -61,45 +55,53 @@ export default function PagoPage({ params }: { params: { id: string } }) {
   return (
     <>
       <AppHeader />
-      <main className="container-app py-6">
-        <div className="mx-auto flex max-w-sm flex-col gap-4">
-          <h1 className="h1">Pago de seña</h1>
+      <main className="container-app py-8">
+        <div className="mx-auto flex max-w-md flex-col gap-5">
+          <a href="/mis-reservas" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-ink-900">
+            <ArrowLeft className="h-4 w-4" /> Mis reservas
+          </a>
 
-          {estado === "cargando" && <p className="text-sm text-slate-500">Cargando…</p>}
-          {estado === "error" && <p className="text-sm text-rose-600">Reserva no encontrada.</p>}
+          {estado === "cargando" && <Spinner />}
+          {estado === "error" && <EmptyState icon={CalendarX2} title="Reserva no encontrada" description="Es posible que ya no exista." action={<Button href="/disponibilidad" variant="outline">Ver disponibilidad</Button>} />}
 
           {estado !== "cargando" && estado !== "error" && (
-            <div className="card flex flex-col gap-1 text-sm">
-              <p><span className="font-medium text-slate-900">Turno:</span> {inicio ? fechaHora.format(new Date(inicio)) : "—"}</p>
-              <p><span className="font-medium text-slate-900">Seña a pagar:</span> {money.format(sena)}</p>
-              <p>
-                <span className="font-medium text-slate-900">Estado:</span>{" "}
-                <span className={`badge ${pagoEstado === "senada" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-                  {pagoEstado === "senada" ? "Señada ✓" : "Pendiente"}
-                </span>
-              </p>
-            </div>
+            <Card className="overflow-hidden p-0">
+              <div className="relative overflow-hidden bg-ink-900 p-6 text-white">
+                <div className="court-lines pointer-events-none absolute inset-0 opacity-50" />
+                <div className="pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full bg-brand-500/25 blur-2xl" />
+                <p className="relative eyebrow text-brand-300">Pago de seña</p>
+                <p className="relative mt-2 text-sm text-white/60">A pagar ahora</p>
+                <p className="relative text-4xl font-extrabold tracking-tight">{money.format(sena)}</p>
+              </div>
+              <div className="flex flex-col gap-4 p-6">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Turno</span>
+                  <span className="font-semibold text-ink-900">{inicio ? fechaHora.format(new Date(inicio)) : "—"}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-slate-500">Estado</span>
+                  {pagoEstado === "senada" ? <Badge tone="green" icon={Check}>Señada</Badge> : <Badge tone="amber">Pendiente</Badge>}
+                </div>
+
+                {estado === "listo" && (
+                  <Button onClick={pagar} loading={procesando} size="lg" full icon={Wallet}>
+                    {procesando ? "Procesando…" : "Pagar seña"}
+                  </Button>
+                )}
+                {estado === "pagado" && (
+                  <div className="flex items-center gap-2 rounded-xl bg-brand-50 px-4 py-3 text-sm font-medium text-brand-800">
+                    <ShieldCheck className="h-5 w-5" /> ¡Seña registrada! Tu turno queda confirmado.
+                  </div>
+                )}
+
+                <p className="flex items-start gap-1.5 text-xs text-slate-400">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  Pago en modo simulado (sin cobro real). Es el punto donde se integra la pasarela (ej. MercadoPago):
+                  al aprobarse el pago vía webhook se registra en la tabla <code>pagos</code> y la reserva pasa a señada.
+                </p>
+              </div>
+            </Card>
           )}
-
-          {estado === "listo" && (
-            <button onClick={pagar} disabled={procesando} className="btn-primary">
-              {procesando ? "Procesando…" : `Pagar seña (simulado) · ${money.format(sena)}`}
-            </button>
-          )}
-
-          {estado === "pagado" && (
-            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              ¡Seña registrada! Tu turno queda confirmado.
-            </p>
-          )}
-
-          <p className="text-xs text-slate-400">
-            Pago en modo simulado (sin cobro real). Acá se integra la pasarela (ej. MercadoPago):
-            el botón crearía la preferencia de pago y, al aprobarse vía webhook, se registra en la
-            tabla <code>pagos</code> y la reserva pasa a señada.
-          </p>
-
-          <a href="/disponibilidad" className="link text-sm">← Volver a disponibilidad</a>
         </div>
       </main>
     </>

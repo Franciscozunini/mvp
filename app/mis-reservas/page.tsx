@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppHeader from "@/components/AppHeader";
+import { Card, Badge, Button, EmptyState, Spinner, Notice } from "@/components/ui";
+import { CalendarPlus, MapPin, Wallet, Check, Clock } from "lucide-react";
 
 type Reserva = {
   id: string;
@@ -12,8 +14,10 @@ type Reserva = {
   canchas: { nombre: string; precio_turno: number; sedes: { nombre: string } | null } | null;
 };
 
+const TZ = "America/Argentina/Buenos_Aires";
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
-const fechaHora = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", dateStyle: "medium", timeStyle: "short" });
+const dia = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, weekday: "long", day: "numeric", month: "long" });
+const hora = new Intl.DateTimeFormat("es-AR", { timeZone: TZ, hour: "2-digit", minute: "2-digit" });
 
 export default function MisReservasPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -59,52 +63,63 @@ export default function MisReservasPage() {
   const proximas = reservas.filter((r) => new Date(r.inicio).getTime() >= ahora);
   const pasadas = reservas.filter((r) => new Date(r.inicio).getTime() < ahora).reverse();
 
-  const Item = ({ r, futura }: { r: Reserva; futura: boolean }) => (
-    <div className="card flex items-center justify-between gap-3">
-      <div className="text-sm">
-        <p className="font-medium text-slate-900">{fechaHora.format(new Date(r.inicio))}</p>
-        <p className="text-slate-500">
-          {r.canchas?.sedes?.nombre ?? ""} · {r.canchas?.nombre ?? "?"} · {money.format(Number(r.canchas?.precio_turno ?? 0))}
-        </p>
-      </div>
-      <div className="flex items-center gap-3 text-sm">
-        <span className={`badge ${r.pago_estado === "senada" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
-          {r.pago_estado === "senada" ? "Señada" : "Sin señar"}
-        </span>
-        {futura && r.pago_estado !== "senada" && <a href={`/pago/${r.id}`} className="link">Pagar seña</a>}
-        {futura && <button onClick={() => cancelar(r.id)} className="btn-danger">Cancelar</button>}
-      </div>
-    </div>
-  );
+  const Item = ({ r, futura }: { r: Reserva; futura: boolean }) => {
+    const senada = r.pago_estado === "senada";
+    return (
+      <Card className={`flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between ${futura ? "" : "opacity-80"}`}>
+        <div className="flex items-center gap-4">
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-ink-900 text-white">
+            <span className="text-lg font-bold leading-none">{hora.format(new Date(r.inicio))}</span>
+          </div>
+          <div>
+            <p className="font-semibold capitalize text-ink-900">{dia.format(new Date(r.inicio))}</p>
+            <p className="mt-0.5 flex items-center gap-1.5 text-sm text-slate-500">
+              <MapPin className="h-3.5 w-3.5" /> {r.canchas?.sedes?.nombre ?? ""} · {r.canchas?.nombre ?? "?"} · {money.format(Number(r.canchas?.precio_turno ?? 0))}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {senada ? <Badge tone="green" icon={Check}>Señada</Badge> : <Badge tone="amber">Sin señar</Badge>}
+          {futura && !senada && <Button href={`/pago/${r.id}`} size="sm" variant="outline" icon={Wallet}>Señar</Button>}
+          {futura && <Button size="sm" variant="danger" onClick={() => cancelar(r.id)}>Cancelar</Button>}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <>
       <AppHeader />
-      <main className="container-app py-6">
-        <div className="flex flex-col gap-4">
-          <h1 className="h1">Mis reservas</h1>
+      <main className="container-app py-8">
+        <div className="flex flex-col gap-6">
+          <header>
+            <p className="eyebrow">Tus turnos</p>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink-900">Mis reservas</h1>
+          </header>
 
-          {estado === "cargando" && <p className="text-sm text-slate-500">Cargando…</p>}
+          {estado === "cargando" && <Spinner />}
           {estado === "no-jugador" && (
-            <p className="text-sm text-slate-500">Esta cuenta no es de jugador. <a href="/dashboard" className="link">Volver</a></p>
+            <EmptyState icon={CalendarPlus} title="Esta cuenta no es de jugador" description="Ingresá con una cuenta de jugador para ver tus reservas." action={<Button href="/dashboard" variant="outline">Volver al inicio</Button>} />
           )}
 
           {estado === "ok" && (
             <>
-              {msg && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{msg}</p>}
+              {msg && <Notice>{msg}</Notice>}
 
-              <h2 className="h2">Próximas</h2>
-              {proximas.length === 0 ? (
-                <p className="text-sm text-slate-500">No tenés turnos próximos. <a href="/disponibilidad" className="link">Reservá uno</a>.</p>
-              ) : (
-                <div className="flex flex-col gap-2">{proximas.map((r) => <Item key={r.id} r={r} futura />)}</div>
-              )}
+              <section className="flex flex-col gap-3">
+                <h2 className="label-xs flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> Próximos turnos</h2>
+                {proximas.length === 0 ? (
+                  <EmptyState icon={CalendarPlus} title="No tenés turnos próximos" description="Buscá una cancha libre y reservá tu próximo partido." action={<Button href="/disponibilidad">Buscar turnos</Button>} />
+                ) : (
+                  <div className="flex flex-col gap-3">{proximas.map((r) => <Item key={r.id} r={r} futura />)}</div>
+                )}
+              </section>
 
-              <h2 className="h2">Historial</h2>
-              {pasadas.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin turnos pasados.</p>
-              ) : (
-                <div className="flex flex-col gap-2">{pasadas.map((r) => <Item key={r.id} r={r} futura={false} />)}</div>
+              {pasadas.length > 0 && (
+                <section className="flex flex-col gap-3">
+                  <h2 className="label-xs">Historial</h2>
+                  <div className="flex flex-col gap-3">{pasadas.map((r) => <Item key={r.id} r={r} futura={false} />)}</div>
+                </section>
               )}
             </>
           )}

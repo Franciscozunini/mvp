@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import AppHeader from "@/components/AppHeader";
+import { Card, Spinner, EmptyState } from "@/components/ui";
+import { CalendarCheck, CalendarClock, TrendingUp, Wallet, ArrowLeft, ShieldAlert, type LucideIcon } from "lucide-react";
 
 type Reserva = { id: string; inicio: string; pago_estado: string; canchas: { nombre: string; precio_turno: number } | null };
 
@@ -30,17 +32,12 @@ export default function ReportesPage() {
 
   useEffect(() => {
     if (estado !== "ok") return;
-    supabase
-      .from("reservas")
-      .select("id, inicio, pago_estado, canchas(nombre, precio_turno)")
-      .then(({ data }) => setReservas((data as unknown as Reserva[]) ?? []));
-    supabase.from("pagos").select("monto").then(({ data }) =>
-      setSenas(((data as { monto: number }[]) ?? []).reduce((s, p) => s + Number(p.monto), 0))
-    );
+    supabase.from("reservas").select("id, inicio, pago_estado, canchas(nombre, precio_turno)").then(({ data }) => setReservas((data as unknown as Reserva[]) ?? []));
+    supabase.from("pagos").select("monto").then(({ data }) => setSenas(((data as { monto: number }[]) ?? []).reduce((s, p) => s + Number(p.monto), 0)));
   }, [supabase, estado]);
 
   const ahora = Date.now();
-  const totales = useMemo(() => {
+  const t = useMemo(() => {
     const ingresos = reservas.reduce((s, r) => s + Number(r.canchas?.precio_turno ?? 0), 0);
     const proximas = reservas.filter((r) => new Date(r.inicio).getTime() >= ahora).length;
     const porCancha = new Map<string, { count: number; ingreso: number }>();
@@ -59,46 +56,51 @@ export default function ReportesPage() {
   return (
     <>
       <AppHeader />
-      <main className="container-app py-6">
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <h1 className="h1">Reportes · {clubNombre}</h1>
-            <a href="/admin" className="link text-sm">← Panel</a>
+      <main className="container-app py-8">
+        <div className="flex flex-col gap-6">
+          <div>
+            <a href="/admin" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-ink-900">
+              <ArrowLeft className="h-4 w-4" /> Panel
+            </a>
+            <p className="eyebrow mt-3">Métricas del club</p>
+            <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink-900">Reportes · {clubNombre}</h1>
           </div>
 
-          {estado === "cargando" && <p className="text-sm text-slate-500">Cargando…</p>}
-          {estado === "no-admin" && <p className="text-sm text-slate-500">No sos admin de ningún club.</p>}
+          {estado === "cargando" && <Spinner />}
+          {estado === "no-admin" && <EmptyState icon={ShieldAlert} title="Acceso solo para administradores" />}
 
           {estado === "ok" && (
             <>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <Tile label="Reservas" value={String(reservas.length)} />
-                <Tile label="Próximas" value={String(totales.proximas)} />
-                <Tile label="Ingreso estimado" value={money.format(totales.ingresos)} />
-                <Tile label="Señas cobradas" value={money.format(senas)} />
+              <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+                <Tile icon={CalendarCheck} label="Reservas totales" value={String(reservas.length)} />
+                <Tile icon={CalendarClock} label="Próximas" value={String(t.proximas)} />
+                <Tile icon={TrendingUp} label="Ingreso estimado" value={money.format(t.ingresos)} accent />
+                <Tile icon={Wallet} label="Señas cobradas" value={money.format(senas)} />
               </div>
 
-              <h2 className="h2">Ocupación por cancha</h2>
-              {totales.filas.length === 0 ? (
-                <p className="text-sm text-slate-500">Sin reservas todavía.</p>
-              ) : (
-                <div className="card flex flex-col gap-3">
-                  {totales.filas.map(([nombre, d]) => (
-                    <div key={nombre}>
-                      <div className="mb-1 flex justify-between text-sm">
-                        <span className="text-slate-700">{nombre}</span>
-                        <span className="text-slate-500">{d.count} · {money.format(d.ingreso)}</span>
+              <section className="flex flex-col gap-3">
+                <h2 className="label-xs">Ocupación por cancha</h2>
+                {t.filas.length === 0 ? (
+                  <EmptyState icon={CalendarClock} title="Sin reservas todavía" />
+                ) : (
+                  <Card className="flex flex-col gap-5 p-6">
+                    {t.filas.map(([nombre, d]) => (
+                      <div key={nombre}>
+                        <div className="mb-2 flex items-baseline justify-between">
+                          <span className="font-semibold text-ink-900">{nombre}</span>
+                          <span className="text-sm text-slate-500">
+                            <span className="font-bold text-ink-900">{d.count}</span> turnos · {money.format(d.ingreso)}
+                          </span>
+                        </div>
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-500" style={{ width: `${(d.count / t.maxCount) * 100}%` }} />
+                        </div>
                       </div>
-                      <div className="h-2 w-full rounded-full bg-slate-100">
-                        <div className="h-2 rounded-full bg-brand" style={{ width: `${(d.count / totales.maxCount) * 100}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-slate-400">
-                Ingreso estimado = suma del precio de todos los turnos reservados. Señas cobradas = pagos registrados.
-              </p>
+                    ))}
+                  </Card>
+                )}
+                <p className="text-xs text-slate-400">Ingreso estimado = suma del precio de todos los turnos reservados. Señas cobradas = pagos registrados.</p>
+              </section>
             </>
           )}
         </div>
@@ -107,11 +109,16 @@ export default function ReportesPage() {
   );
 }
 
-function Tile({ label, value }: { label: string; value: string }) {
+function Tile({ icon: Icon, label, value, accent }: { icon: LucideIcon; label: string; value: string; accent?: boolean }) {
   return (
-    <div className="card">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
-    </div>
+    <Card className={`flex flex-col gap-3 p-5 ${accent ? "bg-ink-900 text-white" : ""}`}>
+      <span className={`grid h-10 w-10 place-items-center rounded-xl ${accent ? "bg-white/10 text-brand-300" : "bg-brand-50 text-brand-600"}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div>
+        <p className={`text-xs ${accent ? "text-white/60" : "text-slate-500"}`}>{label}</p>
+        <p className={`mt-0.5 text-2xl font-extrabold tracking-tight ${accent ? "text-white" : "text-ink-900"}`}>{value}</p>
+      </div>
+    </Card>
   );
 }

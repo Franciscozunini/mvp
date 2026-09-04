@@ -1,9 +1,14 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Pádel Reservas",
-  description: "Reservá tu cancha de pádel",
+  title: "Padelia — Reservá tu cancha de pádel",
+  description: "Encontrá turnos libres, reservá al instante y pagá la seña online.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

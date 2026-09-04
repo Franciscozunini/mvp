@@ -4,45 +4,22 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { arLocalToUtc } from "@/lib/slots";
 import AppHeader from "@/components/AppHeader";
+import { Card, Button, Badge, Spinner, EmptyState } from "@/components/ui";
+import {
+  Building2, MapPin, LayoutGrid, Ban, CalendarClock, SlidersHorizontal, Umbrella, Sun,
+  Plus, Pencil, Trash2, Save, Check, ShieldAlert, BarChart3, Clock,
+} from "lucide-react";
 
 type Sede = { id: string; nombre: string; direccion: string | null };
-type Cancha = {
-  id: string;
-  sede_id: string;
-  nombre: string;
-  techada: boolean;
-  duracion_turno_minutos: number;
-  horario_apertura: string;
-  horario_cierre: string;
-  precio_turno: number;
-};
-type Reserva = {
-  id: string;
-  inicio: string;
-  pago_estado: string;
-  canchas: { nombre: string } | null;
-  jugadores: { nombre: string } | null;
-};
+type Cancha = { id: string; sede_id: string; nombre: string; techada: boolean; duracion_turno_minutos: number; horario_apertura: string; horario_cierre: string; precio_turno: number };
+type Reserva = { id: string; inicio: string; pago_estado: string; canchas: { nombre: string } | null; jugadores: { nombre: string } | null };
 type Bloqueo = { id: string; cancha_id: string; inicio: string; fin: string; motivo: string | null };
-type Reglas = {
-  anticipacion_min_horas: number;
-  cancelacion_min_horas: number;
-  max_reservas_activas: number;
-  sena_porcentaje: number;
-};
+type Reglas = { anticipacion_min_horas: number; cancelacion_min_horas: number; max_reservas_activas: number; sena_porcentaje: number };
 
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
-const fechaHora = new Intl.DateTimeFormat("es-AR", {
-  timeZone: "America/Argentina/Buenos_Aires",
-  dateStyle: "short",
-  timeStyle: "short",
-});
-const REGLAS_DEFAULT: Reglas = {
-  anticipacion_min_horas: 1,
-  cancelacion_min_horas: 2,
-  max_reservas_activas: 3,
-  sena_porcentaje: 30,
-};
+const fechaHora = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", dateStyle: "short", timeStyle: "short" });
+const REGLAS_DEFAULT: Reglas = { anticipacion_min_horas: 1, cancelacion_min_horas: 2, max_reservas_activas: 3, sena_porcentaje: 30 };
+type SB = ReturnType<typeof createClient>;
 
 export default function AdminPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -61,18 +38,13 @@ export default function AdminPage() {
     supabase.auth.getUser().then(({ data }) => {
       const email = data.user?.email;
       if (!email) return setEstado("no-admin");
-      supabase
-        .from("usuarios_club")
-        .select("club_id, clubes(nombre)")
-        .eq("email", email)
-        .maybeSingle()
-        .then(({ data: m }) => {
-          if (!m) return setEstado("no-admin");
-          const club = m.clubes as unknown as { nombre: string } | { nombre: string }[] | null;
-          setClubId(m.club_id as string);
-          setClubNombre(Array.isArray(club) ? club[0]?.nombre : club?.nombre ?? "");
-          setEstado("ok");
-        });
+      supabase.from("usuarios_club").select("club_id, clubes(nombre)").eq("email", email).maybeSingle().then(({ data: m }) => {
+        if (!m) return setEstado("no-admin");
+        const club = m.clubes as unknown as { nombre: string } | { nombre: string }[] | null;
+        setClubId(m.club_id as string);
+        setClubNombre(Array.isArray(club) ? club[0]?.nombre : club?.nombre ?? "");
+        setEstado("ok");
+      });
     });
   }, [supabase]);
 
@@ -81,102 +53,94 @@ export default function AdminPage() {
     supabase.from("sedes").select("id, nombre, direccion").order("nombre").then(({ data }) => setSedes((data as Sede[]) ?? []));
     supabase.from("canchas").select("*").order("nombre").then(({ data }) => setCanchas((data as Cancha[]) ?? []));
     supabase.from("bloqueos").select("*").order("inicio").then(({ data }) => setBloqueos((data as Bloqueo[]) ?? []));
-    supabase
-      .from("reservas")
-      .select("id, inicio, pago_estado, canchas(nombre), jugadores(nombre)")
-      .order("inicio", { ascending: false })
-      .limit(50)
+    supabase.from("reservas").select("id, inicio, pago_estado, canchas(nombre), jugadores(nombre)").order("inicio", { ascending: false }).limit(50)
       .then(({ data }) => setReservas((data as unknown as Reserva[]) ?? []));
-    supabase
-      .from("reglas_club")
-      .select("anticipacion_min_horas, cancelacion_min_horas, max_reservas_activas, sena_porcentaje")
-      .eq("club_id", clubId)
-      .maybeSingle()
+    supabase.from("reglas_club").select("anticipacion_min_horas, cancelacion_min_horas, max_reservas_activas, sena_porcentaje").eq("club_id", clubId).maybeSingle()
       .then(({ data }) => setReglas((data as Reglas) ?? REGLAS_DEFAULT));
   }, [supabase, estado, clubId, v]);
 
-  if (estado === "cargando") return <Wrap><p className="text-sm text-gray-500">Cargando…</p></Wrap>;
-  if (estado === "no-admin")
-    return <Wrap><p className="text-sm">No sos admin de ningún club.</p><a href="/dashboard" className="text-sm underline">← Volver</a></Wrap>;
+  if (estado === "cargando") return <Wrap><Spinner /></Wrap>;
+  if (estado === "no-admin") return <Wrap><EmptyState icon={ShieldAlert} title="Acceso solo para administradores" description="Ingresá con una cuenta de club." action={<Button href="/dashboard" variant="outline">Volver</Button>} /></Wrap>;
 
   return (
     <Wrap>
-      <div className="flex items-center justify-between">
-        <h1 className="h1">Admin · {clubNombre}</h1>
-        <div className="flex gap-4 text-sm">
-          <a href="/admin/reportes" className="link">Reportes</a>
-          <a href="/dashboard" className="link">← Volver</a>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="eyebrow flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Panel de club</p>
+          <h1 className="mt-1 text-3xl font-extrabold tracking-tight text-ink-900">{clubNombre}</h1>
         </div>
-      </div>
+        <Button href="/admin/reportes" variant="outline" size="sm" icon={BarChart3}>Reportes</Button>
+      </header>
 
-      <Section titulo="Reglas de reserva">
+      <Section icon={SlidersHorizontal} titulo="Reglas de reserva" desc="Se aplican a los jugadores; el club queda exento.">
         <ReglasForm clubId={clubId} reglas={reglas} supabase={supabase} onChange={recargar} />
       </Section>
 
-      <Section titulo="Sedes">
-        {sedes.map((s) => <SedeItem key={s.id} sede={s} supabase={supabase} onChange={recargar} />)}
+      <Section icon={MapPin} titulo="Sedes">
+        <div className="flex flex-col gap-2">
+          {sedes.map((s) => <SedeItem key={s.id} sede={s} supabase={supabase} onChange={recargar} />)}
+        </div>
         <NuevaSede clubId={clubId} supabase={supabase} onChange={recargar} />
       </Section>
 
-      <Section titulo="Canchas">
-        {sedes.length === 0 && <p className="text-sm text-gray-500">Creá una sede primero.</p>}
-        {sedes.map((s) => (
-          <div key={s.id} className="rounded border bg-white p-3">
-            <p className="mb-2 text-sm font-semibold">{s.nombre}</p>
-            {canchas.filter((c) => c.sede_id === s.id).map((c) => (
-              <CanchaItem key={c.id} cancha={c} supabase={supabase} onChange={recargar} />
+      <Section icon={LayoutGrid} titulo="Canchas">
+        {sedes.length === 0 ? (
+          <p className="text-sm text-slate-500">Creá una sede primero.</p>
+        ) : (
+          <div className="flex flex-col gap-4">
+            {sedes.map((s) => (
+              <Card key={s.id} className="p-5">
+                <p className="mb-3 flex items-center gap-1.5 font-semibold text-ink-900"><MapPin className="h-4 w-4 text-slate-400" /> {s.nombre}</p>
+                <div className="flex flex-col gap-2">
+                  {canchas.filter((c) => c.sede_id === s.id).map((c) => <CanchaItem key={c.id} cancha={c} supabase={supabase} onChange={recargar} />)}
+                </div>
+                <NuevaCancha sedeId={s.id} supabase={supabase} onChange={recargar} />
+              </Card>
             ))}
-            <NuevaCancha sedeId={s.id} supabase={supabase} onChange={recargar} />
           </div>
-        ))}
+        )}
       </Section>
 
-      <Section titulo="Bloqueos de cancha">
+      <Section icon={Ban} titulo="Bloqueos de cancha" desc="Franjas no reservables (mantenimiento, torneos).">
         {canchas.length === 0 ? (
-          <p className="text-sm text-gray-500">Creá una cancha primero.</p>
+          <p className="text-sm text-slate-500">Creá una cancha primero.</p>
         ) : (
-          <>
+          <Card className="flex flex-col gap-2 p-5">
+            {bloqueos.length === 0 && <p className="text-sm text-slate-400">Sin bloqueos.</p>}
             {bloqueos.map((b) => {
               const c = canchas.find((k) => k.id === b.cancha_id);
               return (
-                <div key={b.id} className="flex items-center justify-between rounded border bg-white px-3 py-2 text-sm">
-                  <span>{c?.nombre ?? "?"} · {fechaHora.format(new Date(b.inicio))} → {fechaHora.format(new Date(b.fin))}{b.motivo ? ` · ${b.motivo}` : ""}</span>
-                  <button
-                    className="text-xs text-red-600 underline"
-                    onClick={async () => { await supabase.from("bloqueos").delete().eq("id", b.id); recargar(); }}
-                  >
-                    Borrar
-                  </button>
+                <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-2.5 text-sm">
+                  <span className="text-ink-900"><b className="font-semibold">{c?.nombre ?? "?"}</b> · {fechaHora.format(new Date(b.inicio))} → {fechaHora.format(new Date(b.fin))}{b.motivo ? ` · ${b.motivo}` : ""}</span>
+                  <button className="text-slate-400 hover:text-rose-600" onClick={async () => { await supabase.from("bloqueos").delete().eq("id", b.id); recargar(); }}><Trash2 className="h-4 w-4" /></button>
                 </div>
               );
             })}
             <NuevoBloqueo canchas={canchas} supabase={supabase} onChange={recargar} />
-          </>
+          </Card>
         )}
       </Section>
 
-      <Section titulo="Reservas del club">
+      <Section icon={CalendarClock} titulo="Reservas del club">
         {reservas.length === 0 ? (
-          <p className="text-sm text-gray-500">Sin reservas.</p>
+          <EmptyState icon={CalendarClock} title="Sin reservas" />
         ) : (
-          <ul className="flex flex-col gap-1">
+          <div className="flex flex-col gap-2">
             {reservas.map((r) => (
-              <li key={r.id} className="flex items-center justify-between rounded border bg-white px-3 py-2 text-sm">
-                <span>
-                  {fechaHora.format(new Date(r.inicio))} · {r.canchas?.nombre ?? "?"} · {r.jugadores?.nombre ?? "—"} ·{" "}
-                  <span className={r.pago_estado === "senada" ? "text-green-700" : "text-gray-500"}>
-                    {r.pago_estado === "senada" ? "señada" : "sin señar"}
+              <Card key={r.id} className="flex items-center justify-between gap-3 p-4">
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-500"><Clock className="h-4 w-4" /></span>
+                  <span className="text-ink-900">
+                    <span className="font-semibold">{fechaHora.format(new Date(r.inicio))}</span> · {r.canchas?.nombre ?? "?"} · {r.jugadores?.nombre ?? "—"}
                   </span>
-                </span>
-                <button
-                  className="text-xs text-red-600 underline"
-                  onClick={async () => { await supabase.from("reservas").delete().eq("id", r.id); recargar(); }}
-                >
-                  Cancelar
-                </button>
-              </li>
+                </div>
+                <div className="flex items-center gap-3">
+                  {r.pago_estado === "senada" ? <Badge tone="green" icon={Check}>Señada</Badge> : <Badge tone="gray">Sin señar</Badge>}
+                  <button className="text-slate-400 hover:text-rose-600" onClick={async () => { await supabase.from("reservas").delete().eq("id", r.id); recargar(); }}><Trash2 className="h-4 w-4" /></button>
+                </div>
+              </Card>
             ))}
-          </ul>
+          </div>
         )}
       </Section>
     </Wrap>
@@ -187,48 +151,51 @@ function Wrap({ children }: { children: React.ReactNode }) {
   return (
     <>
       <AppHeader />
-      <main className="container-app py-6">
-        <div className="flex flex-col gap-6">{children}</div>
+      <main className="container-app py-8">
+        <div className="flex flex-col gap-8">{children}</div>
       </main>
     </>
   );
 }
-function Section({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Section({ icon: Icon, titulo, desc, children }: { icon: LucideIconT; titulo: string; desc?: string; children: React.ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="h2">{titulo}</h2>
+    <section className="flex flex-col gap-3">
+      <div className="flex items-center gap-2.5">
+        <span className="grid h-9 w-9 place-items-center rounded-xl bg-ink-900 text-brand-400"><Icon className="h-[18px] w-[18px]" /></span>
+        <div>
+          <h2 className="font-bold text-ink-900">{titulo}</h2>
+          {desc && <p className="text-xs text-slate-400">{desc}</p>}
+        </div>
+      </div>
       {children}
     </section>
   );
 }
-
-type SB = ReturnType<typeof createClient>;
+type LucideIconT = typeof MapPin;
 
 function ReglasForm({ clubId, reglas, supabase, onChange }: { clubId: string; reglas: Reglas; supabase: SB; onChange: () => void }) {
   const [val, setVal] = useState(reglas);
+  const [saved, setSaved] = useState(false);
   useEffect(() => setVal(reglas), [reglas]);
   const num = (k: keyof Reglas, label: string) => (
-    <label className="flex flex-col gap-1 text-xs">
-      {label}
-      <input type="number" className="w-20 rounded border px-2 py-1" value={val[k]} onChange={(e) => setVal({ ...val, [k]: +e.target.value })} />
+    <label className="flex flex-col gap-1.5">
+      <span className="label-xs">{label}</span>
+      <input type="number" className="field" value={val[k]} onChange={(e) => { setVal({ ...val, [k]: +e.target.value }); setSaved(false); }} />
     </label>
   );
   return (
-    <div className="flex flex-wrap items-end gap-3 rounded border bg-white p-3">
-      {num("anticipacion_min_horas", "Anticip. mín (h)")}
-      {num("cancelacion_min_horas", "Cancel. mín (h)")}
-      {num("max_reservas_activas", "Máx activas")}
-      {num("sena_porcentaje", "Seña %")}
-      <button
-        className="btn-primary text-xs"
-        onClick={async () => {
-          await supabase.from("reglas_club").upsert({ club_id: clubId, ...val });
-          onChange();
-        }}
-      >
-        Guardar reglas
-      </button>
-    </div>
+    <Card className="flex flex-col gap-4 p-5">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {num("anticipacion_min_horas", "Anticip. mín (h)")}
+        {num("cancelacion_min_horas", "Cancel. mín (h)")}
+        {num("max_reservas_activas", "Máx activas")}
+        {num("sena_porcentaje", "Seña %")}
+      </div>
+      <div className="flex items-center gap-3">
+        <Button size="sm" icon={Save} onClick={async () => { await supabase.from("reglas_club").upsert({ club_id: clubId, ...val }); setSaved(true); onChange(); }}>Guardar reglas</Button>
+        {saved && <span className="flex items-center gap-1 text-sm text-brand-600"><Check className="h-4 w-4" /> Guardado</span>}
+      </div>
+    </Card>
   );
 }
 
@@ -238,21 +205,21 @@ function SedeItem({ sede, supabase, onChange }: { sede: Sede; supabase: SB; onCh
   const [dir, setDir] = useState(sede.direccion ?? "");
   if (edit)
     return (
-      <div className="flex flex-wrap items-center gap-2 rounded border bg-white p-2 text-sm">
-        <input className="rounded border px-2 py-1" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-        <input className="rounded border px-2 py-1" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="Dirección" />
-        <button className="text-xs underline" onClick={async () => { await supabase.from("sedes").update({ nombre, direccion: dir }).eq("id", sede.id); setEdit(false); onChange(); }}>Guardar</button>
-        <button className="text-xs underline" onClick={() => setEdit(false)}>Cancelar</button>
-      </div>
+      <Card className="flex flex-wrap items-center gap-2 p-3">
+        <input className="field max-w-[180px]" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+        <input className="field max-w-[220px]" value={dir} onChange={(e) => setDir(e.target.value)} placeholder="Dirección" />
+        <Button size="sm" icon={Save} onClick={async () => { await supabase.from("sedes").update({ nombre, direccion: dir }).eq("id", sede.id); setEdit(false); onChange(); }}>Guardar</Button>
+        <Button size="sm" variant="ghost" onClick={() => setEdit(false)}>Cancelar</Button>
+      </Card>
     );
   return (
-    <div className="flex items-center justify-between rounded border bg-white px-3 py-2 text-sm">
-      <span>{sede.nombre}{sede.direccion ? ` · ${sede.direccion}` : ""}</span>
-      <span className="flex gap-3">
-        <button className="text-xs underline" onClick={() => setEdit(true)}>Editar</button>
-        <button className="text-xs text-red-600 underline" onClick={async () => { if (!confirm("¿Borrar sede y sus canchas/reservas?")) return; await supabase.from("sedes").delete().eq("id", sede.id); onChange(); }}>Borrar</button>
-      </span>
-    </div>
+    <Card className="flex items-center justify-between gap-3 p-4">
+      <span className="text-sm text-ink-900"><b className="font-semibold">{sede.nombre}</b>{sede.direccion ? <span className="text-slate-400"> · {sede.direccion}</span> : ""}</span>
+      <div className="flex items-center gap-1">
+        <button className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-ink-900" onClick={() => setEdit(true)}><Pencil className="h-4 w-4" /></button>
+        <button className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={async () => { if (!confirm("¿Borrar sede y sus canchas/reservas?")) return; await supabase.from("sedes").delete().eq("id", sede.id); onChange(); }}><Trash2 className="h-4 w-4" /></button>
+      </div>
+    </Card>
   );
 }
 
@@ -260,13 +227,11 @@ function NuevaSede({ clubId, supabase, onChange }: { clubId: string; supabase: S
   const [nombre, setNombre] = useState("");
   const [dir, setDir] = useState("");
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <input className="rounded border px-2 py-1" placeholder="Nueva sede" value={nombre} onChange={(e) => setNombre(e.target.value)} />
-      <input className="rounded border px-2 py-1" placeholder="Dirección" value={dir} onChange={(e) => setDir(e.target.value)} />
-      <button className="btn-primary text-xs disabled:opacity-40" disabled={!nombre}
-        onClick={async () => { await supabase.from("sedes").insert({ club_id: clubId, nombre, direccion: dir || null }); setNombre(""); setDir(""); onChange(); }}>
-        Agregar
-      </button>
+    <div className="flex flex-wrap items-center gap-2">
+      <input className="field max-w-[180px]" placeholder="Nueva sede" value={nombre} onChange={(e) => setNombre(e.target.value)} />
+      <input className="field max-w-[220px]" placeholder="Dirección" value={dir} onChange={(e) => setDir(e.target.value)} />
+      <Button size="sm" variant="outline" icon={Plus} disabled={!nombre}
+        onClick={async () => { await supabase.from("sedes").insert({ club_id: clubId, nombre, direccion: dir || null }); setNombre(""); setDir(""); onChange(); }}>Agregar</Button>
     </div>
   );
 }
@@ -275,51 +240,60 @@ const CANCHA_DEFAULT = { nombre: "", techada: false, duracion_turno_minutos: 60,
 
 function CanchaFields({ val, set }: { val: typeof CANCHA_DEFAULT; set: (v: typeof CANCHA_DEFAULT) => void }) {
   return (
-    <>
-      <input className="w-28 rounded border px-2 py-1" placeholder="Nombre" value={val.nombre} onChange={(e) => set({ ...val, nombre: e.target.value })} />
-      <label className="flex items-center gap-1"><input type="checkbox" checked={val.techada} onChange={(e) => set({ ...val, techada: e.target.checked })} /> Techada</label>
-      <input className="w-16 rounded border px-2 py-1" type="number" value={val.duracion_turno_minutos} onChange={(e) => set({ ...val, duracion_turno_minutos: +e.target.value })} title="Duración (min)" />
-      <input className="w-24 rounded border px-2 py-1" type="time" value={val.horario_apertura} onChange={(e) => set({ ...val, horario_apertura: e.target.value })} />
-      <input className="w-24 rounded border px-2 py-1" type="time" value={val.horario_cierre} onChange={(e) => set({ ...val, horario_cierre: e.target.value })} />
-      <input className="w-24 rounded border px-2 py-1" type="number" value={val.precio_turno} onChange={(e) => set({ ...val, precio_turno: +e.target.value })} title="Precio (ARS)" />
-    </>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <label className="flex flex-col gap-1"><span className="label-xs">Nombre</span><input className="field" placeholder="Cancha" value={val.nombre} onChange={(e) => set({ ...val, nombre: e.target.value })} /></label>
+      <label className="flex flex-col gap-1"><span className="label-xs">Techada</span>
+        <button type="button" onClick={() => set({ ...val, techada: !val.techada })} className={`field flex items-center justify-center gap-1.5 font-semibold ${val.techada ? "!border-brand-300 bg-brand-50 text-brand-700" : "text-slate-500"}`}>
+          {val.techada ? <><Umbrella className="h-4 w-4" /> Sí</> : <><Sun className="h-4 w-4" /> No</>}
+        </button>
+      </label>
+      <label className="flex flex-col gap-1"><span className="label-xs">Duración</span><input className="field" type="number" value={val.duracion_turno_minutos} onChange={(e) => set({ ...val, duracion_turno_minutos: +e.target.value })} /></label>
+      <label className="flex flex-col gap-1"><span className="label-xs">Abre</span><input className="field" type="time" value={val.horario_apertura} onChange={(e) => set({ ...val, horario_apertura: e.target.value })} /></label>
+      <label className="flex flex-col gap-1"><span className="label-xs">Cierra</span><input className="field" type="time" value={val.horario_cierre} onChange={(e) => set({ ...val, horario_cierre: e.target.value })} /></label>
+      <label className="flex flex-col gap-1"><span className="label-xs">Precio</span><input className="field" type="number" value={val.precio_turno} onChange={(e) => set({ ...val, precio_turno: +e.target.value })} /></label>
+    </div>
   );
 }
 
 function CanchaItem({ cancha, supabase, onChange }: { cancha: Cancha; supabase: SB; onChange: () => void }) {
   const [edit, setEdit] = useState(false);
-  const [val, setVal] = useState({
-    nombre: cancha.nombre, techada: cancha.techada, duracion_turno_minutos: cancha.duracion_turno_minutos,
-    horario_apertura: cancha.horario_apertura.slice(0, 5), horario_cierre: cancha.horario_cierre.slice(0, 5), precio_turno: Number(cancha.precio_turno),
-  });
+  const [val, setVal] = useState({ nombre: cancha.nombre, techada: cancha.techada, duracion_turno_minutos: cancha.duracion_turno_minutos, horario_apertura: cancha.horario_apertura.slice(0, 5), horario_cierre: cancha.horario_cierre.slice(0, 5), precio_turno: Number(cancha.precio_turno) });
   if (edit)
     return (
-      <div className="mb-1 flex flex-wrap items-center gap-2 rounded border bg-gray-50 p-2 text-xs">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
         <CanchaFields val={val} set={setVal} />
-        <button className="underline" onClick={async () => { await supabase.from("canchas").update(val).eq("id", cancha.id); setEdit(false); onChange(); }}>Guardar</button>
-        <button className="underline" onClick={() => setEdit(false)}>Cancelar</button>
+        <div className="mt-3 flex gap-2">
+          <Button size="sm" icon={Save} onClick={async () => { await supabase.from("canchas").update(val).eq("id", cancha.id); setEdit(false); onChange(); }}>Guardar</Button>
+          <Button size="sm" variant="ghost" onClick={() => setEdit(false)}>Cancelar</Button>
+        </div>
       </div>
     );
   return (
-    <div className="mb-1 flex items-center justify-between rounded border px-2 py-1 text-xs">
-      <span>{cancha.nombre} · {cancha.duracion_turno_minutos}m · {cancha.horario_apertura.slice(0, 5)}–{cancha.horario_cierre.slice(0, 5)} · {cancha.techada ? "techada" : "descubierta"} · {money.format(Number(cancha.precio_turno))}</span>
-      <span className="flex gap-3">
-        <button className="underline" onClick={() => setEdit(true)}>Editar</button>
-        <button className="text-red-600 underline" onClick={async () => { if (!confirm("¿Borrar cancha?")) return; await supabase.from("canchas").delete().eq("id", cancha.id); onChange(); }}>Borrar</button>
-      </span>
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-semibold text-ink-900">{cancha.nombre}</span>
+        <Badge tone={cancha.techada ? "green" : "gray"}>{cancha.techada ? "Cubierta" : "Descubierta"}</Badge>
+        <span className="text-slate-400">{cancha.duracion_turno_minutos}m · {cancha.horario_apertura.slice(0, 5)}–{cancha.horario_cierre.slice(0, 5)} · {money.format(Number(cancha.precio_turno))}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        <button className="rounded-lg p-2 text-slate-400 hover:bg-white hover:text-ink-900" onClick={() => setEdit(true)}><Pencil className="h-4 w-4" /></button>
+        <button className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600" onClick={async () => { if (!confirm("¿Borrar cancha?")) return; await supabase.from("canchas").delete().eq("id", cancha.id); onChange(); }}><Trash2 className="h-4 w-4" /></button>
+      </div>
     </div>
   );
 }
 
 function NuevaCancha({ sedeId, supabase, onChange }: { sedeId: string; supabase: SB; onChange: () => void }) {
+  const [open, setOpen] = useState(false);
   const [val, setVal] = useState(CANCHA_DEFAULT);
+  if (!open) return <button onClick={() => setOpen(true)} className="mt-3 inline-flex items-center gap-1.5 text-sm font-semibold text-brand-700 hover:text-brand-800"><Plus className="h-4 w-4" /> Agregar cancha</button>;
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+    <div className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-3">
       <CanchaFields val={val} set={setVal} />
-      <button className="btn-primary text-xs disabled:opacity-40" disabled={!val.nombre}
-        onClick={async () => { await supabase.from("canchas").insert({ sede_id: sedeId, ...val }); setVal(CANCHA_DEFAULT); onChange(); }}>
-        Agregar cancha
-      </button>
+      <div className="mt-3 flex gap-2">
+        <Button size="sm" icon={Plus} disabled={!val.nombre} onClick={async () => { await supabase.from("canchas").insert({ sede_id: sedeId, ...val }); setVal(CANCHA_DEFAULT); setOpen(false); onChange(); }}>Crear cancha</Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancelar</Button>
+      </div>
     </div>
   );
 }
@@ -332,30 +306,14 @@ function NuevoBloqueo({ canchas, supabase, onChange }: { canchas: Cancha[]; supa
   const [hasta, setHasta] = useState("13:00");
   const [motivo, setMotivo] = useState("");
   return (
-    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
-      <select className="rounded border px-2 py-1" value={canchaId} onChange={(e) => setCanchaId(e.target.value)}>
-        {canchas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-      </select>
-      <input type="date" className="rounded border px-2 py-1" value={fecha} onChange={(e) => setFecha(e.target.value)} />
-      <input type="time" className="rounded border px-2 py-1" value={desde} onChange={(e) => setDesde(e.target.value)} />
-      <input type="time" className="rounded border px-2 py-1" value={hasta} onChange={(e) => setHasta(e.target.value)} />
-      <input className="w-28 rounded border px-2 py-1" placeholder="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
-      <button
-        className="btn-primary text-xs disabled:opacity-40"
-        disabled={!canchaId || hasta <= desde}
-        onClick={async () => {
-          await supabase.from("bloqueos").insert({
-            cancha_id: canchaId,
-            inicio: arLocalToUtc(fecha, desde).toISOString(),
-            fin: arLocalToUtc(fecha, hasta).toISOString(),
-            motivo: motivo || null,
-          });
-          setMotivo("");
-          onChange();
-        }}
-      >
-        Agregar bloqueo
-      </button>
+    <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl border border-dashed border-slate-300 p-3 sm:grid-cols-6">
+      <select className="field" value={canchaId} onChange={(e) => setCanchaId(e.target.value)}>{canchas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select>
+      <input type="date" className="field" value={fecha} onChange={(e) => setFecha(e.target.value)} />
+      <input type="time" className="field" value={desde} onChange={(e) => setDesde(e.target.value)} />
+      <input type="time" className="field" value={hasta} onChange={(e) => setHasta(e.target.value)} />
+      <input className="field" placeholder="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+      <Button size="sm" variant="outline" icon={Ban} disabled={!canchaId || hasta <= desde}
+        onClick={async () => { await supabase.from("bloqueos").insert({ cancha_id: canchaId, inicio: arLocalToUtc(fecha, desde).toISOString(), fin: arLocalToUtc(fecha, hasta).toISOString(), motivo: motivo || null }); setMotivo(""); onChange(); }}>Bloquear</Button>
     </div>
   );
 }
