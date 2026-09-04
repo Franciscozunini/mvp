@@ -19,7 +19,10 @@ Solo fundación: clubes/sedes/canchas/usuarios_club/jugadores, auth multi-club y
 - `/dashboard` — post-login: rol y club (requiere sesión)
 - `/disponibilidad` — turnos por club/sede/cancha/fecha (con precio); un jugador logueado **reserva** un turno libre y **cancela** los suyos, respetando reglas del club (anticipación/cancelación) y bloqueos; puede **pagar la seña**
 - `/pago/[id]` — checkout de seña de una reserva (pago en **modo simulado**; punto de integración de MercadoPago documentado en el código)
+- `/mis-reservas` — el jugador ve sus turnos próximos e historial, cancela y paga seña
+- `/perfil` — el jugador edita su nombre y teléfono
 - `/admin` — panel del admin del club: gestiona sedes, canchas (incl. precio), **reglas de reserva**, **bloqueos** de cancha, y ve/cancela reservas con su estado de pago (requiere sesión de admin)
+- `/admin/reportes` — ocupación e ingresos estimados del club (admin)
 
 ## Cuentas de prueba (creadas por el seed)
 

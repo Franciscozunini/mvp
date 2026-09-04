@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import AppHeader from "@/components/AppHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -8,10 +9,8 @@ export default async function DashboardPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
   if (!user) redirect("/");
 
-  // Si el usuario está en usuarios_club es admin; su RLS solo deja ver su club.
   const { data: membership } = await supabase
     .from("usuarios_club")
     .select("rol, clubes(nombre)")
@@ -22,37 +21,40 @@ export default async function DashboardPage() {
   const club = membership?.clubes as unknown as { nombre: string } | { nombre: string }[] | null;
   const clubNombre = Array.isArray(club) ? club[0]?.nombre : club?.nombre;
 
+  const accesos = esAdmin
+    ? [
+        { href: "/admin", titulo: "Panel de administración", desc: "Sedes, canchas, reglas, bloqueos y reservas" },
+        { href: "/admin/reportes", titulo: "Reportes", desc: "Ocupación e ingresos del club" },
+        { href: "/disponibilidad", titulo: "Disponibilidad", desc: "Ver turnos de las canchas" },
+      ]
+    : [
+        { href: "/disponibilidad", titulo: "Reservar", desc: "Ver disponibilidad y reservar un turno" },
+        { href: "/mis-reservas", titulo: "Mis reservas", desc: "Tus próximos turnos e historial" },
+        { href: "/perfil", titulo: "Mi perfil", desc: "Editar nombre y teléfono" },
+      ];
+
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center gap-4 p-6">
-      <h1 className="text-xl font-bold">Sesión iniciada</h1>
-      <div className="rounded border bg-white p-4 text-sm">
-        <p>
-          <span className="font-semibold">Email:</span> {user.email}
-        </p>
-        <p>
-          <span className="font-semibold">Rol:</span>{" "}
-          {esAdmin ? membership?.rol ?? "admin" : "jugador"}
-        </p>
-        {esAdmin && (
-          <p>
-            <span className="font-semibold">Club:</span>{" "}
-            {clubNombre ?? "(sin acceso)"}
-          </p>
-        )}
-      </div>
-      <a href="/disponibilidad" className="text-sm underline">
-        Ver disponibilidad de canchas →
-      </a>
-      {esAdmin && (
-        <a href="/admin" className="text-sm underline">
-          Panel de administración →
-        </a>
-      )}
-      <form action="/auth/signout" method="post">
-        <button className="rounded border px-3 py-2 text-sm" type="submit">
-          Cerrar sesión
-        </button>
-      </form>
-    </main>
+    <>
+      <AppHeader />
+      <main className="container-app py-6">
+        <div className="flex flex-col gap-6">
+          <div>
+            <h1 className="h1">Hola{clubNombre ? `, ${clubNombre}` : ""} 👋</h1>
+            <p className="text-sm text-slate-500">
+              {user.email} · rol {esAdmin ? membership?.rol ?? "admin" : "jugador"}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            {accesos.map((a) => (
+              <a key={a.href} href={a.href} className="card transition hover:border-brand hover:shadow-md">
+                <p className="font-medium text-slate-900">{a.titulo}</p>
+                <p className="text-sm text-slate-500">{a.desc}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      </main>
+    </>
   );
 }

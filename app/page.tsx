@@ -26,10 +26,7 @@ export default function LoginPage() {
         if (error) throw error;
         setMsg("Te enviamos un magic link. Revisá tu email.");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         router.push("/dashboard");
       }
@@ -41,59 +38,49 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-xl font-bold">Pádel Reservas</h1>
+    <main className="flex min-h-screen items-center justify-center px-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 text-center">
+          <div className="text-3xl">🎾</div>
+          <h1 className="mt-1 text-xl font-bold text-slate-900">Pádel Reservas</h1>
+          <p className="text-sm text-slate-500">Ingresá para reservar tu cancha</p>
+        </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTipo("jugador")}
-          className={`flex-1 rounded border px-3 py-2 text-sm ${
-            tipo === "jugador" ? "bg-black text-white" : "bg-white"
-          }`}
-        >
-          Jugador
-        </button>
-        <button
-          type="button"
-          onClick={() => setTipo("admin")}
-          className={`flex-1 rounded border px-3 py-2 text-sm ${
-            tipo === "admin" ? "bg-black text-white" : "bg-white"
-          }`}
-        >
-          Admin de club
-        </button>
+        <div className="card flex flex-col gap-4">
+          <div className="grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm">
+            {(["jugador", "admin"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTipo(t)}
+                className={`rounded-md px-3 py-1.5 font-medium transition ${
+                  tipo === t ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"
+                }`}
+              >
+                {t === "jugador" ? "Jugador" : "Admin de club"}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={onSubmit} className="flex flex-col gap-3">
+            <label className="label">
+              Email
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className="input" placeholder="tu@email.com" />
+            </label>
+            {tipo === "admin" && (
+              <label className="label">
+                Contraseña
+                <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} className="input" placeholder="••••••••" />
+              </label>
+            )}
+            <button type="submit" disabled={loading} className="btn-primary mt-1">
+              {loading ? "..." : tipo === "jugador" ? "Enviar magic link" : "Ingresar"}
+            </button>
+          </form>
+
+          {msg && <p className="text-sm text-slate-600">{msg}</p>}
+        </div>
       </div>
-
-      <form onSubmit={onSubmit} className="flex flex-col gap-3">
-        <input
-          type="email"
-          required
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="rounded border px-3 py-2"
-        />
-        {tipo === "admin" && (
-          <input
-            type="password"
-            required
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="rounded border px-3 py-2"
-          />
-        )}
-        <button
-          type="submit"
-          disabled={loading}
-          className="rounded bg-black px-3 py-2 text-white disabled:opacity-50"
-        >
-          {tipo === "jugador" ? "Enviar magic link" : "Ingresar"}
-        </button>
-      </form>
-
-      {msg && <p className="text-sm text-gray-700">{msg}</p>}
     </main>
   );
 }

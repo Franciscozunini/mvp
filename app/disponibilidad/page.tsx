@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { generarSlots, arLocalToUtc, type Slot } from "@/lib/slots";
+import AppHeader from "@/components/AppHeader";
 
 type Club = { id: string; nombre: string };
 type Sede = { id: string; nombre: string };
@@ -18,11 +19,7 @@ type Reglas = { anticipacion_min_horas: number; cancelacion_min_horas: number };
 
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
 const hoyAR = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires" }).format(new Date());
-const hhmm = new Intl.DateTimeFormat("es-AR", {
-  timeZone: "America/Argentina/Buenos_Aires",
-  hour: "2-digit",
-  minute: "2-digit",
-});
+const hhmm = new Intl.DateTimeFormat("es-AR", { timeZone: "America/Argentina/Buenos_Aires", hour: "2-digit", minute: "2-digit" });
 const H = 3_600_000;
 
 export default function DisponibilidadPage() {
@@ -73,9 +70,7 @@ export default function DisponibilidadPage() {
       .select("anticipacion_min_horas, cancelacion_min_horas")
       .eq("club_id", clubId)
       .maybeSingle()
-      .then(({ data }) =>
-        setReglas((data as Reglas) ?? { anticipacion_min_horas: 0, cancelacion_min_horas: 0 })
-      );
+      .then(({ data }) => setReglas((data as Reglas) ?? { anticipacion_min_horas: 0, cancelacion_min_horas: 0 }));
   }, [supabase, clubId]);
 
   useEffect(() => {
@@ -99,19 +94,8 @@ export default function DisponibilidadPage() {
     const openIso = arLocalToUtc(fecha, cancha.horario_apertura).toISOString();
     const closeIso = arLocalToUtc(fecha, cancha.horario_cierre).toISOString();
     Promise.all([
-      supabase
-        .from("reservas")
-        .select("id, jugador_id, pago_estado, inicio, fin")
-        .eq("cancha_id", cancha.id)
-        .neq("estado", "cancelada")
-        .lt("inicio", closeIso)
-        .gt("fin", openIso),
-      supabase
-        .from("bloqueos")
-        .select("inicio, fin")
-        .eq("cancha_id", cancha.id)
-        .lt("inicio", closeIso)
-        .gt("fin", openIso),
+      supabase.from("reservas").select("id, jugador_id, pago_estado, inicio, fin").eq("cancha_id", cancha.id).neq("estado", "cancelada").lt("inicio", closeIso).gt("fin", openIso),
+      supabase.from("bloqueos").select("inicio, fin").eq("cancha_id", cancha.id).lt("inicio", closeIso).gt("fin", openIso),
     ]).then(([r, b]) => {
       setSlots(
         generarSlots({
@@ -148,100 +132,91 @@ export default function DisponibilidadPage() {
   }
 
   const canchaSel = canchas.find((c) => c.id === canchaId);
+  const sel = "select";
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Disponibilidad</h1>
-        <a href="/dashboard" className="text-sm underline">← Volver</a>
-      </div>
+    <>
+      <AppHeader />
+      <main className="container-app py-6">
+        <div className="flex flex-col gap-4">
+          <h1 className="h1">Disponibilidad</h1>
+          <p className="text-sm text-slate-500">
+            {miJugadorId
+              ? "Reservá un turno libre y cancelá los tuyos."
+              : "Modo lectura. Iniciá sesión como jugador para reservar."}
+          </p>
 
-      <p className="text-xs text-gray-600">
-        {miJugadorId
-          ? "Sesión de jugador: podés reservar turnos libres y cancelar los tuyos."
-          : "Modo lectura. Iniciá sesión como jugador para reservar."}
-      </p>
+          <div className="card grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <label className="label">Club
+              <select value={clubId} onChange={(e) => setClubId(e.target.value)} className={sel}>
+                {clubes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </label>
+            <label className="label">Sede
+              <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} className={sel}>
+                {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+              </select>
+            </label>
+            <label className="label">Cancha
+              <select value={canchaId} onChange={(e) => setCanchaId(e.target.value)} className={sel}>
+                {canchas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </label>
+            <label className="label">Fecha
+              <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="input" />
+            </label>
+          </div>
 
-      <div className="grid grid-cols-2 gap-3">
-        <label className="flex flex-col gap-1 text-sm">Club
-          <select value={clubId} onChange={(e) => setClubId(e.target.value)} className="rounded border px-2 py-1">
-            {clubes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">Sede
-          <select value={sedeId} onChange={(e) => setSedeId(e.target.value)} className="rounded border px-2 py-1">
-            {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">Cancha
-          <select value={canchaId} onChange={(e) => setCanchaId(e.target.value)} className="rounded border px-2 py-1">
-            {canchas.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">Fecha
-          <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="rounded border px-2 py-1" />
-        </label>
-      </div>
+          {canchaSel && (
+            <p className="text-xs text-slate-500">
+              Turnos de {canchaSel.duracion_turno_minutos} min · {canchaSel.horario_apertura.slice(0, 5)}–
+              {canchaSel.horario_cierre.slice(0, 5)} (hora AR) · {money.format(Number(canchaSel.precio_turno))} por turno
+              {reglas.anticipacion_min_horas > 0 && ` · reservar con ${reglas.anticipacion_min_horas}h de anticipación`}
+            </p>
+          )}
 
-      {canchaSel && (
-        <p className="text-xs text-gray-600">
-          Turnos de {canchaSel.duracion_turno_minutos} min · {canchaSel.horario_apertura.slice(0, 5)}–
-          {canchaSel.horario_cierre.slice(0, 5)} (hora AR) · {money.format(Number(canchaSel.precio_turno))} por turno
-          {reglas.anticipacion_min_horas > 0 && ` · reservar con ${reglas.anticipacion_min_horas}h de anticipación`}
-        </p>
-      )}
+          {msg && <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{msg}</p>}
 
-      {msg && <p className="text-sm text-red-600">{msg}</p>}
-
-      {cargando ? (
-        <p className="text-sm text-gray-500">Cargando…</p>
-      ) : slots.length === 0 ? (
-        <p className="text-sm text-gray-500">Sin turnos para mostrar.</p>
-      ) : (
-        <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {slots.map((s, i) => {
-            const ahora = Date.now();
-            const esMia = !!s.reserva && s.reserva.jugador_id === miJugadorId;
-            const ocupado = !!s.reserva;
-            const reservable =
-              miJugadorId && !ocupado && !s.bloqueado &&
-              s.inicio.getTime() >= ahora + reglas.anticipacion_min_horas * H;
-            const cancelable =
-              esMia && ahora < s.inicio.getTime() - reglas.cancelacion_min_horas * H;
-            const cls = s.bloqueado
-              ? "border-gray-300 bg-gray-100 text-gray-500"
-              : esMia
-              ? "border-blue-300 bg-blue-50 text-blue-700"
-              : ocupado
-              ? "border-red-300 bg-red-50 text-red-700"
-              : "border-green-300 bg-green-50 text-green-700";
-            return (
-              <li key={i} className={`rounded border px-2 py-2 text-center text-sm ${cls}`}>
-                <div className="font-medium">{hhmm.format(s.inicio)}–{hhmm.format(s.fin)}</div>
-                {s.bloqueado ? (
-                  <div className="text-xs">No disponible</div>
-                ) : esMia ? (
-                  <div className="text-xs">
-                    <div>{s.reserva!.pago_estado === "senada" ? "Señada ✓" : "Sin señar"}</div>
-                    {s.reserva!.pago_estado !== "senada" && (
-                      <a href={`/pago/${s.reserva!.id}`} className="underline">Pagar seña</a>
+          {cargando ? (
+            <p className="text-sm text-slate-500">Cargando…</p>
+          ) : slots.length === 0 ? (
+            <p className="text-sm text-slate-500">Sin turnos para mostrar.</p>
+          ) : (
+            <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {slots.map((s, i) => {
+                const ahora = Date.now();
+                const esMia = !!s.reserva && s.reserva.jugador_id === miJugadorId;
+                const ocupado = !!s.reserva;
+                const reservable = miJugadorId && !ocupado && !s.bloqueado && s.inicio.getTime() >= ahora + reglas.anticipacion_min_horas * H;
+                const cancelable = esMia && ahora < s.inicio.getTime() - reglas.cancelacion_min_horas * H;
+                const cls = s.bloqueado ? "chip-bloq" : esMia ? "chip-mia" : ocupado ? "chip-ocupado" : "chip-libre";
+                return (
+                  <li key={i} className={`chip ${cls}`}>
+                    <div className="font-medium">{hhmm.format(s.inicio)}–{hhmm.format(s.fin)}</div>
+                    {s.bloqueado ? (
+                      <div className="text-xs">No disponible</div>
+                    ) : esMia ? (
+                      <div className="text-xs">
+                        <div>{s.reserva!.pago_estado === "senada" ? "Señada ✓" : "Sin señar"}</div>
+                        <div className="mt-0.5 flex justify-center gap-2">
+                          {s.reserva!.pago_estado !== "senada" && <a href={`/pago/${s.reserva!.id}`} className="link">Pagar seña</a>}
+                          {cancelable && <button onClick={() => cancelar(s.reserva!.id)} className="underline underline-offset-2">Cancelar</button>}
+                        </div>
+                      </div>
+                    ) : ocupado ? (
+                      <div className="text-xs">Ocupado</div>
+                    ) : reservable ? (
+                      <button onClick={() => reservar(s)} className="mt-1 text-xs font-medium text-emerald-700 underline underline-offset-2">Reservar</button>
+                    ) : (
+                      <div className="text-xs">Libre</div>
                     )}
-                    {cancelable && (
-                      <button onClick={() => cancelar(s.reserva!.id)} className="ml-2 underline">Cancelar</button>
-                    )}
-                  </div>
-                ) : ocupado ? (
-                  <div className="text-xs">Ocupado</div>
-                ) : reservable ? (
-                  <button onClick={() => reservar(s)} className="mt-1 text-xs underline">Reservar</button>
-                ) : (
-                  <div className="text-xs">Libre</div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </main>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </main>
+    </>
   );
 }

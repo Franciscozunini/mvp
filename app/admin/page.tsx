@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { arLocalToUtc } from "@/lib/slots";
+import AppHeader from "@/components/AppHeader";
 
 type Sede = { id: string; nombre: string; direccion: string | null };
 type Cancha = {
@@ -101,8 +102,11 @@ export default function AdminPage() {
   return (
     <Wrap>
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold">Admin · {clubNombre}</h1>
-        <a href="/dashboard" className="text-sm underline">← Volver</a>
+        <h1 className="h1">Admin · {clubNombre}</h1>
+        <div className="flex gap-4 text-sm">
+          <a href="/admin/reportes" className="link">Reportes</a>
+          <a href="/dashboard" className="link">← Volver</a>
+        </div>
       </div>
 
       <Section titulo="Reglas de reserva">
@@ -180,12 +184,19 @@ export default function AdminPage() {
 }
 
 function Wrap({ children }: { children: React.ReactNode }) {
-  return <main className="mx-auto flex min-h-screen max-w-2xl flex-col gap-6 p-6">{children}</main>;
+  return (
+    <>
+      <AppHeader />
+      <main className="container-app py-6">
+        <div className="flex flex-col gap-6">{children}</div>
+      </main>
+    </>
+  );
 }
 function Section({ titulo, children }: { titulo: string; children: React.ReactNode }) {
   return (
     <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-bold uppercase text-gray-500">{titulo}</h2>
+      <h2 className="h2">{titulo}</h2>
       {children}
     </section>
   );
@@ -209,7 +220,7 @@ function ReglasForm({ clubId, reglas, supabase, onChange }: { clubId: string; re
       {num("max_reservas_activas", "Máx activas")}
       {num("sena_porcentaje", "Seña %")}
       <button
-        className="rounded bg-black px-3 py-1 text-xs text-white"
+        className="btn-primary text-xs"
         onClick={async () => {
           await supabase.from("reglas_club").upsert({ club_id: clubId, ...val });
           onChange();
@@ -252,7 +263,7 @@ function NuevaSede({ clubId, supabase, onChange }: { clubId: string; supabase: S
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <input className="rounded border px-2 py-1" placeholder="Nueva sede" value={nombre} onChange={(e) => setNombre(e.target.value)} />
       <input className="rounded border px-2 py-1" placeholder="Dirección" value={dir} onChange={(e) => setDir(e.target.value)} />
-      <button className="rounded bg-black px-3 py-1 text-xs text-white disabled:opacity-40" disabled={!nombre}
+      <button className="btn-primary text-xs disabled:opacity-40" disabled={!nombre}
         onClick={async () => { await supabase.from("sedes").insert({ club_id: clubId, nombre, direccion: dir || null }); setNombre(""); setDir(""); onChange(); }}>
         Agregar
       </button>
@@ -305,7 +316,7 @@ function NuevaCancha({ sedeId, supabase, onChange }: { sedeId: string; supabase:
   return (
     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
       <CanchaFields val={val} set={setVal} />
-      <button className="rounded bg-black px-3 py-1 text-white disabled:opacity-40" disabled={!val.nombre}
+      <button className="btn-primary text-xs disabled:opacity-40" disabled={!val.nombre}
         onClick={async () => { await supabase.from("canchas").insert({ sede_id: sedeId, ...val }); setVal(CANCHA_DEFAULT); onChange(); }}>
         Agregar cancha
       </button>
@@ -330,7 +341,7 @@ function NuevoBloqueo({ canchas, supabase, onChange }: { canchas: Cancha[]; supa
       <input type="time" className="rounded border px-2 py-1" value={hasta} onChange={(e) => setHasta(e.target.value)} />
       <input className="w-28 rounded border px-2 py-1" placeholder="Motivo" value={motivo} onChange={(e) => setMotivo(e.target.value)} />
       <button
-        className="rounded bg-black px-3 py-1 text-white disabled:opacity-40"
+        className="btn-primary text-xs disabled:opacity-40"
         disabled={!canchaId || hasta <= desde}
         onClick={async () => {
           await supabase.from("bloqueos").insert({

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import AppHeader from "@/components/AppHeader";
 
 const money = new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 });
 const fechaHora = new Intl.DateTimeFormat("es-AR", {
@@ -58,39 +59,49 @@ export default function PagoPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
-      <h1 className="text-xl font-bold">Pago de seña</h1>
+    <>
+      <AppHeader />
+      <main className="container-app py-6">
+        <div className="mx-auto flex max-w-sm flex-col gap-4">
+          <h1 className="h1">Pago de seña</h1>
 
-      {estado === "cargando" && <p className="text-sm text-gray-500">Cargando…</p>}
-      {estado === "error" && <p className="text-sm text-red-600">Reserva no encontrada.</p>}
+          {estado === "cargando" && <p className="text-sm text-slate-500">Cargando…</p>}
+          {estado === "error" && <p className="text-sm text-rose-600">Reserva no encontrada.</p>}
 
-      {estado !== "cargando" && estado !== "error" && (
-        <div className="rounded border bg-white p-4 text-sm">
-          <p><span className="font-semibold">Turno:</span> {inicio ? fechaHora.format(new Date(inicio)) : "—"}</p>
-          <p><span className="font-semibold">Seña a pagar:</span> {money.format(sena)}</p>
-          <p><span className="font-semibold">Estado:</span> {pagoEstado === "senada" ? "Señada ✓" : "Pendiente"}</p>
+          {estado !== "cargando" && estado !== "error" && (
+            <div className="card flex flex-col gap-1 text-sm">
+              <p><span className="font-medium text-slate-900">Turno:</span> {inicio ? fechaHora.format(new Date(inicio)) : "—"}</p>
+              <p><span className="font-medium text-slate-900">Seña a pagar:</span> {money.format(sena)}</p>
+              <p>
+                <span className="font-medium text-slate-900">Estado:</span>{" "}
+                <span className={`badge ${pagoEstado === "senada" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                  {pagoEstado === "senada" ? "Señada ✓" : "Pendiente"}
+                </span>
+              </p>
+            </div>
+          )}
+
+          {estado === "listo" && (
+            <button onClick={pagar} disabled={procesando} className="btn-primary">
+              {procesando ? "Procesando…" : `Pagar seña (simulado) · ${money.format(sena)}`}
+            </button>
+          )}
+
+          {estado === "pagado" && (
+            <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              ¡Seña registrada! Tu turno queda confirmado.
+            </p>
+          )}
+
+          <p className="text-xs text-slate-400">
+            Pago en modo simulado (sin cobro real). Acá se integra la pasarela (ej. MercadoPago):
+            el botón crearía la preferencia de pago y, al aprobarse vía webhook, se registra en la
+            tabla <code>pagos</code> y la reserva pasa a señada.
+          </p>
+
+          <a href="/disponibilidad" className="link text-sm">← Volver a disponibilidad</a>
         </div>
-      )}
-
-      {estado === "listo" && (
-        <button
-          onClick={pagar}
-          disabled={procesando}
-          className="rounded bg-black px-3 py-2 text-white disabled:opacity-50"
-        >
-          {procesando ? "Procesando…" : `Pagar seña (simulado) · ${money.format(sena)}`}
-        </button>
-      )}
-
-      {estado === "pagado" && <p className="text-sm text-green-700">¡Seña registrada! Tu turno queda confirmado.</p>}
-
-      <p className="text-xs text-gray-400">
-        Pago en modo simulado (sin cobro real). Acá se integra la pasarela (ej. MercadoPago):
-        el botón crearía la preferencia de pago y, al aprobarse el pago vía webhook, se registra en
-        la tabla <code>pagos</code> y la reserva pasa a señada.
-      </p>
-
-      <a href="/disponibilidad" className="text-sm underline">← Volver a disponibilidad</a>
-    </main>
+      </main>
+    </>
   );
 }
