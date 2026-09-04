@@ -40,9 +40,9 @@ export default function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-6 text-center">
-          <div className="text-3xl">🎾</div>
-          <h1 className="mt-1 text-xl font-bold text-slate-900">Pádel Reservas</h1>
+        <div className="mb-6 flex flex-col items-center text-center">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-2xl shadow-md">🎾</span>
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900">Pádel Reservas</h1>
           <p className="text-sm text-slate-500">Ingresá para reservar tu cancha</p>
         </div>
 
