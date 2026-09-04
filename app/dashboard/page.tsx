@@ -40,6 +40,9 @@ export default async function DashboardPage() {
           </p>
         )}
       </div>
+      <a href="/disponibilidad" className="text-sm underline">
+        Ver disponibilidad de canchas →
+      </a>
       <form action="/auth/signout" method="post">
         <button className="rounded border px-3 py-2 text-sm" type="submit">
           Cerrar sesión

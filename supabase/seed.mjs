@@ -65,7 +65,7 @@ async function borrarAuthUsers(emails) {
 
 async function main() {
   // 1. Limpiar (orden FK-safe).
-  for (const t of ["jugadores", "usuarios_club", "canchas", "sedes", "clubes"]) {
+  for (const t of ["reservas", "jugadores", "usuarios_club", "canchas", "sedes", "clubes"]) {
     await del(t);
   }
 
@@ -73,8 +73,12 @@ async function main() {
   const emailsAuth = [...clubes.map((c) => c.adminEmail), ...jugadores.map((j) => j.email)];
   await borrarAuthUsers(emailsAuth);
 
+  // Primera cancha de cada club, para sembrar reservas de ejemplo.
+  const canchasDemo = [];
+
   // 3. Clubes -> sedes -> canchas -> admin.
   for (const club of clubes) {
+    let canchaDemoClub = null;
     const { data: clubRow, error: e1 } = await db
       .from("clubes")
       .insert({ nombre: club.nombre, email: club.email, telefono: club.telefono })
@@ -101,9 +105,21 @@ async function main() {
           horario_cierre: club.cierre,
         });
       }
-      const { error: e3 } = await db.from("canchas").insert(canchas);
+      const { data: canchasRows, error: e3 } = await db
+        .from("canchas")
+        .insert(canchas)
+        .select("id, duracion_turno_minutos");
       if (e3) throw new Error(`canchas ${sede.nombre}: ${e3.message}`);
+
+      if (!canchaDemoClub && canchasRows?.[0]) {
+        canchaDemoClub = {
+          id: canchasRows[0].id,
+          duracionMin: canchasRows[0].duracion_turno_minutos,
+          apertura: club.apertura,
+        };
+      }
     }
+    if (canchaDemoClub) canchasDemo.push(canchaDemoClub);
 
     // Admin: auth user (email+password) + fila en usuarios_club.
     const { error: e4 } = await db.auth.admin.createUser({
@@ -120,9 +136,15 @@ async function main() {
   }
 
   // 4. Jugadores: fila + auth user (confirmado; login por magic link).
+  const jugadorIds = [];
   for (const j of jugadores) {
-    const { error: e6 } = await db.from("jugadores").insert(j);
+    const { data: jRow, error: e6 } = await db
+      .from("jugadores")
+      .insert(j)
+      .select("id")
+      .single();
     if (e6) throw new Error(`jugador ${j.email}: ${e6.message}`);
+    jugadorIds.push(jRow.id);
     const { error: e7 } = await db.auth.admin.createUser({
       email: j.email,
       email_confirm: true,
@@ -130,10 +152,37 @@ async function main() {
     if (e7) throw new Error(`auth jugador ${j.email}: ${e7.message}`);
   }
 
+  // 5. Reservas de ejemplo (hoy AR, 10:00 y 14:00) en la 1ra cancha de cada club.
+  const hoyAR = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+  }).format(new Date());
+  const utc = (h) => new Date(`${hoyAR}T${h}:00-03:00`).toISOString();
+
+  const reservas = [];
+  canchasDemo.forEach((c, idx) => {
+    for (const hora of ["10:00", "14:00"]) {
+      const inicio = utc(hora);
+      const fin = new Date(
+        new Date(inicio).getTime() + c.duracionMin * 60_000
+      ).toISOString();
+      reservas.push({
+        cancha_id: c.id,
+        jugador_id: jugadorIds[idx % jugadorIds.length] ?? null,
+        inicio,
+        fin,
+      });
+    }
+  });
+  if (reservas.length) {
+    const { error: e8 } = await db.from("reservas").insert(reservas);
+    if (e8) throw new Error(`reservas: ${e8.message}`);
+  }
+
   console.log("Seed OK");
   console.log(`  Clubes: ${clubes.length}`);
   console.log(`  Admins (password: ${ADMIN_PASSWORD}): ${clubes.map((c) => c.adminEmail).join(", ")}`);
   console.log(`  Jugadores: ${jugadores.map((j) => j.email).join(", ")}`);
+  console.log(`  Reservas de ejemplo: ${reservas.length} (fecha ${hoyAR}, 10:00 y 14:00 AR)`);
 }
 
 main().catch((err) => {
